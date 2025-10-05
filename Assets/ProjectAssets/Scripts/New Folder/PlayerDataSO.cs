@@ -1,8 +1,8 @@
-// PlayerData.cs
 using UnityEngine;
+using System;
 
 [CreateAssetMenu(menuName = "Game/Player Data")]
-public class PlayerData : ScriptableObject
+public class PlayerDataSO : ScriptableObject
 {
     [Header("Basic Info")]
     public string playerId;
@@ -20,6 +20,8 @@ public class PlayerData : ScriptableObject
     public int baseExpRequired = 100;
     public float expMultiplier = 1.5f;
     public int pointsPerLevel = 3;
+
+    public event Action OnDataChanged;
 
     public int RequiredExpForNextLevel
     {
@@ -47,12 +49,14 @@ public class PlayerData : ScriptableObject
         strength = 10;
         defense = 10;
         agility = 10;
+        OnDataChanged?.Invoke();
     }
 
     public void AddExperience(int amount)
     {
         experience += amount;
         CheckLevelUp();
+        OnDataChanged?.Invoke();
     }
 
     private void CheckLevelUp()
@@ -62,32 +66,47 @@ public class PlayerData : ScriptableObject
             experience -= RequiredExpForNextLevel;
             level++;
             availableSkillPoints += pointsPerLevel;
+            Debug.Log($"¡Nivel subido! Ahora eres nivel {level}. Obtienes {pointsPerLevel} puntos de habilidad.");
         }
     }
 
-    public bool CanAssignSkillPoint(StatType stat)
+    public bool CanAssignSkillPoint(StatType stat, int pointsToAssign = 1)
     {
-        return availableSkillPoints > 0;
+        return availableSkillPoints >= pointsToAssign;
     }
 
-    public void AssignSkillPoint(StatType stat)
+    public void AssignSkillPoint(StatType stat, int pointsToAssign = 1)
     {
-        if (!CanAssignSkillPoint(stat)) return;
+        if (!CanAssignSkillPoint(stat, pointsToAssign))
+        {
+            Debug.LogWarning("No hay suficientes puntos de habilidad disponibles.");
+            return;
+        }
 
-        availableSkillPoints--;
+        availableSkillPoints -= pointsToAssign;
 
         switch (stat)
         {
             case StatType.Strength:
-                strength++;
+                strength += pointsToAssign;
+                Debug.Log($"Fuerza aumentada a {strength}");
                 break;
             case StatType.Defense:
-                defense++;
+                defense += pointsToAssign;
+                Debug.Log($"Defensa aumentada a {defense}");
                 break;
             case StatType.Agility:
-                agility++;
+                agility += pointsToAssign;
+                Debug.Log($"Agilidad aumentada a {agility}");
                 break;
         }
+        OnDataChanged?.Invoke();
+    }
+
+    public void UpdatePlayerName(string newName)
+    {
+        playerName = newName;
+        OnDataChanged?.Invoke();
     }
 }
 

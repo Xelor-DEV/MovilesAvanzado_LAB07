@@ -8,4 +8,5 @@ public interface IAuthService
     Task<bool> LoginAsync();
     Task<string> GetPlayerNameAsync();
     Task<bool> UpdatePlayerNameAsync(string newName);
+    string GetPlayerId();
 }
