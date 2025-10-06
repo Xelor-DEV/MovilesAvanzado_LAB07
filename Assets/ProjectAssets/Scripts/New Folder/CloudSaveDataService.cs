@@ -74,21 +74,10 @@ public class CloudSaveDataService : MonoBehaviour, IDataService
     {
         try
         {
-            PlayerData defaultData = new PlayerData
-            {
-                player_id = AuthenticationService.Instance.PlayerId,
-                player_name = "Player",
-                level = 1,
-                experience = 0,
-                available_skill_points = 0,
-                strength = 10,
-                defense = 10,
-                agility = 10,
-                base_exp_required = 100,
-                exp_multiplier = 1.5f,
-                points_per_level = 3,
-                game_version = CurrentGameVersion
-            };
+			PlayerDataSO defaultDataSO = ScriptableObject.CreateInstance<PlayerDataSO>();
+            defaultDataSO.Initialize(AuthenticationService.Instance.PlayerId, "Player");
+			
+            PlayerData defaultData = ConvertFromPlayerDataSO(defaultDataSO);
 
             string playerDataJson = JsonUtility.ToJson(defaultData);
             var saveData = new Dictionary<string, object>
