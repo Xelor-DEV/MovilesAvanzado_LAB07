@@ -7,46 +7,37 @@ using UnityEngine;
 
 public class CloudSaveDataService : MonoBehaviour, IDataService
 {
+    private string CurrentGameVersion => Application.version;
+
     public async Task<PlayerDataSO> LoadPlayerDataAsync()
     {
         try
         {
-            var data = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
+            var keys = new HashSet<string> { "player_profile" };
+            var data = await CloudSaveService.Instance.Data.Player.LoadAsync(keys);
 
-            if (data.Count == 0)
+            if (data == null || data.Count == 0)
             {
                 Debug.Log("No se encontraron datos guardados, inicializando nuevo jugador");
                 return null;
             }
 
-            PlayerDataSO playerData = ScriptableObject.CreateInstance<PlayerDataSO>();
+            if (data.TryGetValue("player_profile", out var profile))
+            {
+                string json = profile.Value.GetAs<string>();
+                PlayerData playerData = JsonUtility.FromJson<PlayerData>(json);
+                
+                // Verificar versión del juego si es necesario
+                if (playerData.game_version != CurrentGameVersion)
+                {
+                    Debug.Log($"Datos de versión diferente: {playerData.game_version} -> {CurrentGameVersion}");
+                    // Aquí podrías añadir migración de datos si es necesario
+                }
 
-            if (data.TryGetValue("playerId", out var playerId))
-                playerData.playerId = playerId.Value.GetAs<string>();
+                return ConvertToPlayerDataSO(playerData);
+            }
 
-            if (data.TryGetValue("playerName", out var playerName))
-                playerData.playerName = playerName.Value.GetAs<string>();
-
-            if (data.TryGetValue("level", out var level))
-                playerData.level = level.Value.GetAs<int>();
-
-            if (data.TryGetValue("experience", out var exp))
-                playerData.experience = exp.Value.GetAs<int>();
-
-            if (data.TryGetValue("availableSkillPoints", out var points))
-                playerData.availableSkillPoints = points.Value.GetAs<int>();
-
-            if (data.TryGetValue("strength", out var strength))
-                playerData.strength = strength.Value.GetAs<int>();
-
-            if (data.TryGetValue("defense", out var defense))
-                playerData.defense = defense.Value.GetAs<int>();
-
-            if (data.TryGetValue("agility", out var agility))
-                playerData.agility = agility.Value.GetAs<int>();
-
-            Debug.Log("Datos cargados exitosamente de Cloud Save");
-            return playerData;
+            return null;
         }
         catch (Exception ex)
         {
@@ -59,19 +50,16 @@ public class CloudSaveDataService : MonoBehaviour, IDataService
     {
         try
         {
-            var playerData = new Dictionary<string, object>
+            PlayerData playerData = ConvertFromPlayerDataSO(data);
+            playerData.game_version = CurrentGameVersion;
+
+            string playerDataJson = JsonUtility.ToJson(playerData);
+            var saveData = new Dictionary<string, object>
             {
-                { "playerId", data.playerId },
-                { "playerName", data.playerName },
-                { "level", data.level },
-                { "experience", data.experience },
-                { "availableSkillPoints", data.availableSkillPoints },
-                { "strength", data.strength },
-                { "defense", data.defense },
-                { "agility", data.agility }
+                { "player_profile", playerDataJson }
             };
 
-            await CloudSaveService.Instance.Data.Player.SaveAsync(playerData);
+            await CloudSaveService.Instance.Data.Player.SaveAsync(saveData);
             Debug.Log("Datos guardados exitosamente en Cloud Save");
             return true;
         }
@@ -86,19 +74,29 @@ public class CloudSaveDataService : MonoBehaviour, IDataService
     {
         try
         {
-            var defaultData = new Dictionary<string, object>
+            PlayerData defaultData = new PlayerData
             {
-                { "playerId", AuthenticationService.Instance.PlayerId },
-                { "playerName", "Player" },
-                { "level", 1 },
-                { "experience", 0 },
-                { "availableSkillPoints", 0 },
-                { "strength", 10 },
-                { "defense", 10 },
-                { "agility", 10 }
+                player_id = AuthenticationService.Instance.PlayerId,
+                player_name = "Player",
+                level = 1,
+                experience = 0,
+                available_skill_points = 0,
+                strength = 10,
+                defense = 10,
+                agility = 10,
+                base_exp_required = 100,
+                exp_multiplier = 1.5f,
+                points_per_level = 3,
+                game_version = CurrentGameVersion
             };
 
-            await CloudSaveService.Instance.Data.Player.SaveAsync(defaultData);
+            string playerDataJson = JsonUtility.ToJson(defaultData);
+            var saveData = new Dictionary<string, object>
+            {
+                { "player_profile", playerDataJson }
+            };
+
+            await CloudSaveService.Instance.Data.Player.SaveAsync(saveData);
             Debug.Log("Jugador nuevo inicializado en Cloud Save");
             return true;
         }
@@ -108,4 +106,58 @@ public class CloudSaveDataService : MonoBehaviour, IDataService
             return false;
         }
     }
+
+    private PlayerData ConvertFromPlayerDataSO(PlayerDataSO so)
+    {
+        return new PlayerData
+        {
+            player_id = so.playerId,
+            player_name = so.playerName,
+            level = so.level,
+            experience = so.experience,
+            available_skill_points = so.availableSkillPoints,
+            strength = so.strength,
+            defense = so.defense,
+            agility = so.agility,
+            base_exp_required = so.baseExpRequired,
+            exp_multiplier = so.expMultiplier,
+            points_per_level = so.pointsPerLevel
+        };
+    }
+
+    private PlayerDataSO ConvertToPlayerDataSO(PlayerData data)
+    {
+        PlayerDataSO playerData = ScriptableObject.CreateInstance<PlayerDataSO>();
+        
+        playerData.playerId = data.player_id;
+        playerData.playerName = data.player_name;
+        playerData.level = data.level;
+        playerData.experience = data.experience;
+        playerData.availableSkillPoints = data.available_skill_points;
+        playerData.strength = data.strength;
+        playerData.defense = data.defense;
+        playerData.agility = data.agility;
+        playerData.baseExpRequired = data.base_exp_required;
+        playerData.expMultiplier = data.exp_multiplier;
+        playerData.pointsPerLevel = data.points_per_level;
+
+        return playerData;
+    }
+}
+
+[Serializable]
+public class PlayerData
+{
+    public string player_id;
+    public string player_name;
+    public int level;
+    public int experience;
+    public int available_skill_points;
+    public int strength;
+    public int defense;
+    public int agility;
+    public int base_exp_required;
+    public float exp_multiplier;
+    public int points_per_level;
+    public string game_version;
 }
